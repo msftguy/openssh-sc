@@ -1,0 +1,187 @@
+#	$OpenBSD$
+
+# This is the sshd server system-wide configuration file.  See
+# sshd_config(5) for more information.
+
+# This sshd was compiled with PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# The strategy used for options in the default sshd_config shipped with
+# OpenSSH is to specify options with their default value where
+# possible, but leave them commented.  Uncommented options override the
+# default value.
+
+#Port 22
+#AddressFamily any
+#ListenAddress 0.0.0.0
+#ListenAddress ::
+
+# The default requires explicit activation of protocol 1
+#Protocol 2
+
+# HostKey for protocol version 1
+#HostKey /etc/ssh/ssh_host_key
+# HostKeys for protocol version 2
+#HostKey /etc/ssh/ssh_host_rsa_key
+#HostKey /etc/ssh/ssh_host_dsa_key
+#HostKey /etc/ssh/ssh_host_ecdsa_key
+
+# "key type names" for X.509 certificates with RSA key
+# Note first defined is used in signature operations!
+#X509KeyAlgorithm x509v3-sign-rsa,rsa-md5
+#X509KeyAlgorithm x509v3-sign-rsa,rsa-sha1
+
+# "key type names" for X.509 certificates with DSA key
+# Note first defined is used in signature operations!
+#X509KeyAlgorithm x509v3-sign-dss,dss-asn1
+#X509KeyAlgorithm x509v3-sign-dss,dss-raw
+
+# The intended use for the X509 client certificate. Without this option
+# no chain verification will be done. Currently accepted uses are case
+# insensitive:
+#  - "sslclient", "SSL client", "SSL_client" or "client"
+#  - "any", "Any Purpose", "Any_Purpose" or "AnyPurpose"
+#  - "skip" or ""(empty): don`t check purpose.
+#AllowedCertPurpose sslclient
+
+# Specifies whether self-issued(self-signed) X.509 certificate can be
+# allowed only by entry in AutorizedKeysFile that contain matching
+# public key or certificate blob.
+#KeyAllowSelfIssued no
+
+# Specifies whether CRL must present in store for all certificates in
+# certificate chain with atribute "cRLDistributionPoints"
+#MandatoryCRL no
+
+# A file with multiple certificates of certificate signers
+# in PEM format concatenated together.
+#CACertificateFile /etc/ssh/ca/ca-bundle.crt
+
+# A directory with certificates of certificate signers.
+# The certificates should have name of the form: [HASH].[NUMBER]
+# or have symbolic links to them of this form.
+#CACertificatePath /etc/ssh/ca/crt
+
+# A file with multiple CRL of certificate signers
+# in PEM format concatenated together.
+#CARevocationFile /etc/ssh/ca/ca-bundle.crl
+
+# A directory with CRL of certificate signers. 
+# The CRL should have name of the form: [HASH].r[NUMBER]
+# or have symbolic links to them of this form.
+#CARevocationPath /etc/ssh/ca/crl
+
+# LDAP protocol version.
+# Example:
+# CAldapVersion 2
+
+# Note because of OpenSSH options parser limitation
+# use %3D instead of = !
+# LDAP initialization may require URL to be escaped, i.e.
+# use %2C instead of ,(comma). Escaped URL don't depend from
+# LDAP initialization method.
+# Example:
+# CAldapURL ldap://localhost:389/dc%3Dexample%2Cdc%3Dcom
+
+# SSH can use "Online Certificate Status Protocol"(OCSP)
+# to validate certificate. Set VAType to
+#  - none    : do not use OCSP to validate certificates;
+#  - ocspcert: validate only certificates that specify `OCSP
+#      Service Locator' URL;
+#  - ocspspec: use specified in the configuration 'OCSP Responder'
+#      to validate all certificates.
+#VAType none
+
+# Lifetime and size of ephemeral version 1 server key
+#KeyRegenerationInterval 1h
+#ServerKeyBits 1024
+
+# Logging
+# obsoletes QuietMode and FascistLogging
+#SyslogFacility AUTH
+#LogLevel INFO
+
+# Authentication:
+
+#LoginGraceTime 2m
+#PermitRootLogin yes
+#StrictModes yes
+#MaxAuthTries 6
+#MaxSessions 10
+
+#RSAAuthentication yes
+#PubkeyAuthentication yes
+
+# The default is to check both .ssh/authorized_keys and .ssh/authorized_keys2
+# but this is overridden so installations will only check .ssh/authorized_keys
+AuthorizedKeysFile	.ssh/authorized_keys
+
+# For this to work you will also need host keys in /etc/ssh/ssh_known_hosts
+#RhostsRSAAuthentication no
+# similar for protocol version 2
+#HostbasedAuthentication no
+# Change to yes if you don't trust ~/.ssh/known_hosts for
+# RhostsRSAAuthentication and HostbasedAuthentication
+#IgnoreUserKnownHosts no
+# Don't read the user's ~/.rhosts and ~/.shosts files
+#IgnoreRhosts yes
+
+# To disable tunneled clear text passwords, change to no here!
+#PasswordAuthentication yes
+#PermitEmptyPasswords no
+
+# Change to no to disable s/key passwords
+#ChallengeResponseAuthentication yes
+
+# Kerberos options
+#KerberosAuthentication no
+#KerberosOrLocalPasswd yes
+#KerberosTicketCleanup yes
+#KerberosGetAFSToken no
+
+# GSSAPI options
+#GSSAPIAuthentication no
+#GSSAPICleanupCredentials yes
+
+# Set this to 'yes' to enable PAM authentication, account processing, 
+# and session processing. If this is enabled, PAM authentication will 
+# be allowed through the ChallengeResponseAuthentication and
+# PasswordAuthentication.  Depending on your PAM configuration,
+# PAM authentication via ChallengeResponseAuthentication may bypass
+# the setting of "PermitRootLogin without-password".
+# If you just want the PAM account and session checks to run without
+# PAM authentication, then enable this but set PasswordAuthentication
+# and ChallengeResponseAuthentication to 'no'.
+#UsePAM no
+
+#AllowAgentForwarding yes
+#AllowTcpForwarding yes
+#GatewayPorts no
+#X11Forwarding no
+#X11DisplayOffset 10
+#X11UseLocalhost yes
+#PrintMotd yes
+#PrintLastLog yes
+#TCPKeepAlive yes
+#UseLogin no
+#UsePrivilegeSeparation yes
+#PermitUserEnvironment no
+#Compression delayed
+#ClientAliveInterval 0
+#ClientAliveCountMax 3
+#UseDNS yes
+#PidFile /var/run/sshd.pid
+#MaxStartups 10
+#PermitTunnel no
+#ChrootDirectory none
+
+# no default banner path
+#Banner none
+
+# override default of no subsystems
+Subsystem	sftp	/usr/libexec/sftp-server
+
+# Example of overriding settings on a per-user basis
+#Match User anoncvs
+#	X11Forwarding no
+#	AllowTcpForwarding no
+#	ForceCommand cvs server

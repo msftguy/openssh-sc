@@ -1,0 +1,618 @@
+                                                          Roumen Petrov
+                                                        Sofia, Bulgaria
+                                                         Sun Jan 8 2012
+
+How to use X.509 certificates with OpenSSH?
+
+
+Identity or hostkey file for protocol version 2 can contain private key
+plus X.509 certificate in PEM format. Note that protocol version 2 keys
+are in PEM format. To use X.509 certificate as identity or hostkey user
+should convert certificate in PEM format and append to file. After this
+with "ssh-keygen -y ..." user must update "pub" file.
+File (identity or hostkey) with X.509 certificate (RSA key):
+-----BEGIN RSA PRIVATE KEY-----
+.....
+-----END RSA PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+.....
+-----END CERTIFICATE-----
+Note that to use X.509 certificates in OpenSSH files must contain
+private key followed by certificate that match private key!
+
+
+1.) server configuration:
+
+1.1.) .../sshd_config
+
+1.1.1.) AllowedCertPurpose sslclient
+  The intended use off the X.509 client certificate.
+
+1.1.2.) "X509 store".
+  Server use "X509 store" to verify and validate client keys.
+
+1.1.2.1.) CACertificateFile /etc/ssh/ca/ca-bundle.crt
+  This file contain multiple certificates of certificate signers in PEM
+format concatenated together. You can get a copy from openssl, apache,
+KDE, mutt, etc. packages. Original file might is exported from Netscape
+certificate database and one download URL is:
+  http://www.modssl.org/contrib/ca-bundle.crt.tar.gz
+
+1.1.2.2.) CACertificatePath /etc/ssh/ca/crt
+  "Hash dir" with certificates of certificate signers. Each certificate
+should be stored in separate file with name [HASH].[NUMBER], where
+[HASH] is certificate hash value and [NUMBER] is an integer starting
+from zero. Hash is result from command like this:
+$ openssl x509 -in certificate_file_name -noout -hash
+
+1.1.2.3.) CARevocationFile /etc/ssh/ca/ca-bundle.crl
+  This file contain multiple "Certificate Revocation List" (CRL) of
+certificate signers in PEM format concatenated together.
+
+1.1.2.4.) CARevocationPath /etc/ssh/ca/crl
+  "Hash dir" with "Certificate Revocation List" (CRL) of certificate
+signers. Each CRL should be stored in separate file with name
+[HASH].r[NUMBER], where [HASH] is CRL hash value and [NUMBER] is an
+integer starting from zero. Hash is result from command like this:
+$ openssl crl -in crl_file_name -noout -hash
+
+1.1.2.5.) CAldapVersion
+  LDAP protocol version. Default depend from LDAP library.
+
+1.1.2.6.) CAldapURL
+  Hostport and dn of LDAP URL. No default value.
+
+1.1.3.) HostKey files...
+  Host key for protocol version 2 can contain private key plus X.509
+certificate in PEM format.
+
+1.1.4.) X509KeyAlgorithm
+  This is new option that replace old one X509rsaSigType.
+  The option list multiple "X509 Key Algorithms Formats"
+  supported by server.
+  The format is described in sshd_config(5).
+  The default for certificates with RSA key is:
+    X509KeyAlgorithm x509v3-sign-rsa,rsa-sha1
+    X509KeyAlgorithm x509v3-sign-rsa,rsa-md5
+  The default for certificates with DSA key is:
+    X509KeyAlgorithm x509v3-sign-dss,dss-asn1
+    X509KeyAlgorithm x509v3-sign-dss,dss-raw
+  The first listed format for each key-type, i.e. RSA or DSA
+  is used as default in signing. The server will accept
+  all listed formats.
+
+  NOTE: version before 7.1 use rsa-md5 first. Starting from
+  7.1 rsa-sha1 is prefered and client and server identify itself
+  as PKIX in comment section of ssh identification string.
+
+1.1.5.) X509rsaSigType=md5
+  Deprecated option replaced by X509KeyAlgorithm.
+
+1.1.6.) VAType none
+  Specifies whether `Online Certificate Status Protocol' (OCSP) is used
+  to validate client X.509 certificates. Specified value is used only
+  when OpenSSH is build with OCSP support. See sshd_config(5) man page
+  for allowed values and other VA* options.
+
+1.1.7.) KeyAllowSelfIssued no
+  Specifies whether self-issued(self-signed) X.509 certificate can be
+  allowed only by entry in AutorizedKeysFile that contain matching
+  public key or certificate blob.
+
+1.2.) user files on the server
+  Append in USER_HOME/.ssh/authorized_keys a record with following
+format:
+<KEY_TYPE><SPACE><WORDDN><SPACE>{<Distinguished_Name>|CertBlob}
+where:
+KEY_TYPE:=x509v3-sign-rsa|x509v3-sign-dss (case sensitive !)
+WORDDN:={Distinguished Name|
+        Distinguished-Name|
+        Distinguished_Name|
+        DistinguishedName|
+        DN|
+        Subject}<WORDDNSUFF>
+WORDDNSUFF:='='|':'|''
+NOTES:
+- WORDDN is case insensitive !
+
+- <Distinguished Name> is like output from command:
+$ openssl x509 -noout -subject -in A_CERTIFICATE_FILE -nameopt oneline
+
+- <Distinguished Name> can be in RFC2253 format like output from command:
+$ openssl x509 -noout -subject -in A_CERTIFICATE_FILE -nameopt RFC2253
+
+IMPORTANT NOTE (if a distinguished name contain non-ascii character):
+- for versions 6.+:
+  ALWAIS use "openssl x509" command option -nameopt !
+  The parser don't and won't support output without -nameopt
+- for versions prior 6.0:
+  The program could'not parse non-latin subject. Use "blob" format (see below).
+
+- Order of items in <Distinguished Name> is not important and separator
+can be symbol "/", "," or mixed. All following subjects are equal:
+a)CN=dsa test certificate,OU=OpenSSH Testers,O=Test Team,ST=World,C=XX
+b)/C=XX/ST=World/O=Test Team/OU=OpenSSH Testers/CN=dsa test certificate
+c)/O=Test Team/OU=OpenSSH Testers/C=XX/ST=World/CN=dsa test certificate
+d)O=Test Team,OU=OpenSSH Testers/C=XX,ST=World/CN=dsa test certificate
+
+- CertBlob is base64 encoded sequence of bytes in only one line.
+
+Shell sample:
+- "Distinguished Name" format (rsa key):
+$ ( printf 'x509v3-sign-rsa ';
+  openssl x509 -noout -subject \
+  -in A_OPENSSH_IDENTITY_FILE \
+  -nameopt oneline \
+  ) >> $HOME/.ssh/authorized_keys
+
+- "blob" format:
+$ cat A_OPENSSH_IDENTITY_FILE.pub \
+  >> $HOME/.ssh/authorized_keys
+
+NOTES:
+- adjust user authorized_keys file ownership - user must have at least
+read access.
+- SecSH X.509 key type is "x509v3-sign-rsa" or "x509v3-sign-dss".
+- When OpenSSH is build with "--disable-x509store" YOU CANNOT USE
+"Distinguished Name" format. You shold use ONLY "blob" format.
+
+
+2.) client settings:
+
+2.1.) IdentityFile
+  Depends from client. To use X.509 certificate "OpenSSH id-file" must
+contain both sections - private key and certificate in PEM format:
+Note: Don't forget to update public key file with command:
+$ ssh-keygen -y -f IDENTITY_FILE > IDENTITY_FILE.pub
+Command ssh-add use public key file!
+
+2.2.) global ssh_config, $HOME/.ssh/config or command line
+
+2.2.1.) AllowedCertPurpose sslserver
+  The intended use of the X.509 server certificate.
+
+2.2.2.) "X509 store".
+  Client use "X509 store" to verify and validate server hostkey.
+  See p. 1.1.2.) and check the options:
+- [User]CACertificatePath;
+- [User]CACertificateFile;
+- [User]CARevocationFile;
+- [User]CARevocationPath;
+- [User]CAldapVersion;
+- [User]CAldapURL.
+
+Note: When we use own CA we must import CA certificate[s] to
+"X509 store". More info on:
+  http://roumenpetrov.info/domino_CA/#dca2bundle
+
+2.2.3.) X509KeyAlgorithm
+  The meaning of options is same as in server.
+  See p. 1.1.4.)
+
+2.2.4.) X509rsaSigType=md5
+  Deprecated option replaced by X509KeyAlgorithm.
+
+2.2.5.) VAType none
+  Specifies whether `Online Certificate Status Protocol' (OCSP) is used
+  to validate server X.509 certificates. Specified value is used only
+  when OpenSSH is build with OCSP support. See ssh_config(5) man page
+  for allowed values and other VA* options.
+
+
+3.) test X.509 certificates.
+
+3.1.) In openssh build dir run "make check" or "make tests".
+  Both commands are equivalent and run regression tests.
+  If you want to test only X.509 certificates you can run
+$ make check-certs
+
+  If certificate test scripts fail might you should setup test
+configuration in the file OPENSSH_SOURCE_PATH/tests/CA/config or
+use some environment variables. Used variables are described
+later in the document.
+
+  Output from "make check-certs" is in color and when is redirected to
+file later we can see content best with command "less -r ...".
+  When script run a test command print star '*' followed by simple
+information about command. When command succeed script print at right
+"done" in GREEN(!) otherwise "failed" in RED(!). After failed command
+script show on next lines in RED(!) response, skip execution of next
+command/script, print message like this:
+....
+Testing OpenSSH client with certificates finished.
+  status:                                                        failed
+....
+  Note that failed is in RED(!) and exit code is NONZERO(!).
+  Some command in a test script must fail. Part of "simple information"
+about command expected to fail is in RED(!). When command fail script
+print "done" (THIS IS CORRECT - COMMAND MUST FAIL) and on next lines
+print in GREEN(!) response. Usually this occur when server reject logon.
+WHEN ALL TESTS SUCCEED output is:
+....
+Testing OpenSSH client with certificates finished.
+  status:                                                        done
+....
+  Note that "done" is in GREEN(!) and exit code is ZERO(!).
+
+3.1.1.) Description of variables in Makefile file:
+  - SHELL
+    Used shell to run tests. Supported shell are bash, ksh, zsh and ash.
+    Test scripts runs on standard unix sh.
+    Example:
+    $ make check-certs SHELL=/bin/zsh
+
+    See below how to specify shell at configure time. This is preffered
+    setup instead to override shell.
+
+3.1.2.) Description of variables in config file:
+
+3.1.2.1.) main variables:
+  - SUDO
+    (environment or config) by default is not set.
+    on some system sshd must be started as root.
+    If necessary configure sudo'ers first and then set variable to sudo
+    for test pusposed.
+  - TMPDIR
+    (environment or config)
+    directory for temporary files. If not set its value is selected
+    from /tmp, /var/tmp or /usr/tmp.
+  - SSH_X509TESTS
+    (environment or config)
+    list with test scripts. A test script is in file with following
+    name: test-<LISTITEM>.sh.inc.
+  - OPENSSL_FIPS
+    (environment)
+    applicable for build with FIPS capable OpenSSL
+    see notes below
+
+3.1.2.2.) openssl:
+  - OPENSSL
+    (environment or config)
+    path to openssl binary. The default is result from command:
+    `which openssl`.
+  - RSA_DIGEST_LIST
+    (environment or config)
+    list with RSA digests in support of openssl. The default value is
+    build at run time from following digest list "sha1 md5 mdc2 md4
+    rmd160" and contain only supported from openssl.
+
+3.1.2.3.) server section:
+  Read sshd_config.5 manual page for valid values.
+  - SSHD_PORT
+    (environment or config)
+    Specifies the port number that server listens on and client connect
+    to on SSHD_LISTENADDRESS. The default is 20022.
+  - SSHD_LISTENADDRESS
+    (only in config)
+    Same as sshd option "ListenAddress" but without(!) port number.
+    The default is "127.0.0.1".
+  - SSHSERVER_USEPRIVILEGESEPARATION="yes":
+    (only in config)
+    sshd "UsePrivilegeSeparation" option.
+    if necessary set to "no", to disable privilege separation.
+  - SSHSERVER_SYSLOGFACILITY=AUTH
+    (only in config)
+    sshd "SyslogFacility" option.
+  - SSHSERVER_LOGLEVEL=INFO
+    (only in config)
+    sshd 'LogLevel' option.
+
+3.1.2.4.) certificates:
+  - Variables related to test certificates and CA.
+    (only in config)
+
+3.1.2.5.) OCSP responder:
+  Used only when OpenSSH is build with OCSP support!
+  Variables related to OCSP tests.
+  - SSH_VA_BASEPORT
+    (environment or config)
+    Test script run one or more OCSP responders at same once. First
+    responder listen on specified port, second on port plus one and
+    etc. The default is 20080.
+  - SSH_OPENSLL_OCSP_TMOUT=60
+    (config)
+    Wait specified number of seconds sockets opened by OCSP responders
+    to close. After this test script continue with next step.
+    This is work around for missing SO_REUSEADDR socket option in
+    OpenSSL OCSP responder.
+
+3.1.2.5.) LDAP:
+  In use only when OpenSSH is build with LDAP support!
+  - SSH_LDAP_DB
+    (config)
+    Specifies LDAP database type. The default is ldbm.
+  - SSH_LDAP_DC
+    (config)
+    Specifies domain name component in LDAP distinguished name.
+    The default is "dc=example,dc=com".
+  - LDAPD_PORT
+    (environment or config)
+    LDAP daemon run by test script run listens on SSHD_LISTENADDRESS
+    and this port. The default is 20389.
+
+3.1.2.6.) Key&Certificate from "devices":
+  Starting from version 7.0 of X.509 certificate support in ssh client
+  you   could use X.509 certificates and respective key stored in
+  external devices. Access is based on OpenSSL engine.
+
+3.1.2.6.1.) OpenSSL NSS engine (cryptographic module)
+  Next sample show how to use with client with "OpenSSL NSS engine"
+  ( http://roumenpetrov.info/e_nss/ ).
+
+  First lets list certificates:
+$ openssl engine e_nss -t -post LIST_CERTS:1
+....E_NSS:CMD_LIST_CERT:DB is not initialized:e_nss_cmd.c:77:
+
+  Above failure show that engine is not properly configured.
+
+  You should find NSS db directory and to configure. For instance:
+    $HOME/.mozilla/firefox/<PROFILEHASH>.default
+    $HOME/.mozilla/seamonkey/<PROFILEHASH>.default
+  , where <PROFILEHASH> is created when you create profile
+  for Mozillas application.
+  In case of doubth where is located NSS database just run 
+$ find $HOME/.mozilla -name cert8.db
+
+   Next samples will use "test/nssdb" as path to NSS database.
+
+$ openssl engine e_nss -t \
+  -post CONFIG_DIR:test/nssdb \
+  -post LIST_CERTS:1
+(e_nss) NSS engine support (0.2.1)
+     [ available ]
+[Success]: CONFIG_DIR:test/nssdb
+nickname='OpenSSH DSA test certificate(rsa_sha1) - OpenSSH Te.........
+  subject_name='E=email@not.set,CN=OpenSSH DSA test certific..........
+  email_addr  ='email@not.set'
+nickname='OpenSSH RSA test certificate(rsa_sha1) - OpenSSH Te.........
+  subject_name='E=email@not.set,CN=OpenSSH RSA test certific..........
+  email_addr  ='email@not.set'
+[Success]: LIST_CERTS:1
+
+  Next setup ssh_engine:
+$ cat ssh_engine
+Engine e_nss
+          CONFIG_DIR test/nssdb
+  The openssh configuration match above openssl test command.
+  Ref. to manual page ssh_engine(5) for details.
+
+  Lets assume that ssh server is setup to accept you certificate.
+$ ssh -E ssh_engine \
+  -i engine:e_nss:"\"OpenSSH RSA test certificate(rsa_sha1) -....\"" \
+  ....
+  where dots replease part of actual nickname, -E specify engine
+  configuration file instead default one, -i specify IdentityFile in
+  format engine:[ENGNAME]:[KEY_SEARCH_CRITERIA]
+  Note quote of nickname is it contain space characters
+
+3.1.2.7.) FIPS capable openssl:
+  Starting from version 7.1 of X.509 certificate support all programs
+  initialise openssl in FIPS mode if enviroment variable OPENSSL_FIPS
+  is set.
+  Note that you could run X.509 certificate tests in FIPS mode but
+  you must ensure that test certificates are created in fips mode.
+  So first go to $(top_builddir)/tests/CA and run "make clean".
+  Then return to top build directory and run the tests again.
+  OPENSSL_FIPS=1 make check-certs ....
+
+
+3.1.3.) Sample commands to run tests:
+$ OPENSSL=/usr/local/ssl/bin/openssl make check-certs
+$ SSHD_PORT=1122 SSH_X509TESTS="agent blob_auth" make check-certs
+$ RSA_DIGEST_LIST="sha1 md5" make check-certs
+$ make check-certs SHELL=/bin/ksh
+
+When check fail see "Troubleshooting" later in document.
+
+Note: starting from version 7.0 of X.509 certificate support test use
+shell specified during configuration by CONFIG_SHELL=..., i.e.
+$ CONFIG_SHELL=/bin/ksh .../configure ...
+$ ...
+$ make check-certs
+
+3.2.) Current test scripts uses only rsa as server hostkey.
+  To test sshd with X.509 certificate please find in file
+openssh_tests.sh variable TEST_SSHD_HOSTKEY and change it. Sample:
+TEST_SSH_HOSTKEY="$CWD/testhostkey_rsa-rsa_sha1"
+
+
+3.3.) Test SecSH from "Microsoft Windows OS-es".
+  This is not part of document.
+Tips: use created after "make check-certs" files:
+- convert OPENSSH_BUILD_PATH/tests/CA/ca-test/crt/*crt.pem CA
+  certificates from PEM to DER format and import in
+  "Windows keystore";
+- import OPENSSH_BUILD_PATH/tests/CA/testid_*.p12 files in
+  "Windows keystore";
+- setup your client to use certificate[s](see SecSH client manuals).
+DON'T FORGET TO REMOVE entries from "Windows keystore" after test!
+
+
+3.4.) Go to OPENSSH_BUILD_PATH/tests/CA and run command "make clean" to
+remove all client/server and CA files.
+
+
+3.5.) files in OPENSSH_SOURCE_PATH/tests/CA directory:
+config:
+  Configuration file.
+
+env.in:
+  Template file.
+  Currently contain variables related to LDAP directories.
+
+shell.rc:
+  Shell settings.
+
+1-cre_cadb.sh:
+  Create "Test CA" directories and files.
+
+2-cre_key.sh
+  Create ssh keys. Use test configuration, i.e.
+  run ssh-keygen in FIPS mode if requested.
+
+2-cre_cakeys.sh:
+  Create "Test CA" private keys and certificates.
+
+3-cre_certs.sh:
+  Create client/server certificates.
+  This command create files with mask
+  "PATH_TO_KEYFILEn-<SIGNATURE_ALGORITHM>[.<EXTENTION>]"
+  , where <SIGNATURE_ALGORITHM> is in format "rsa_<DIGEST>" or "dsa".
+  DIGEST are form variable "RSA_DIGEST_LIST" specified in "config"
+  file. Files without extention are openssh identity or hostkey files.
+  File with .pub extention contain openssh public key (BLOB format).
+  File with .crt extention contain openssl "text output" for identity
+  files. Files with .p12 extention are for "Microsoft Windows keystore".
+  Note: .p12 = .pfx for Windows.
+
+4-cre_crls.sh:
+  Revoke part of client certificates.
+
+5-cre_ldap.sh
+  Create LDAP ldif files and slapd config.
+
+verify.sh:
+  To check certificates against "Test CA". Note: check only
+  testid_*.crt and testhostkey_*.crt files in current directory.
+
+functions:
+  Common usefull functions.
+
+openssh_tests.sh:
+  Main test script - call other testscripts.
+
+test-blob_auth.sh.inc,
+test-dn_auth_file.sh.inc,
+test-dn_auth_path.sh.inc,
+test-agent.sh.inc,
+test-crl.sh.inc,
+test-self.sh.inc,
+test-alg.sh.inc,
+test-algfmt.sh.inc,
+test-ocsp.sh.inc,
+test-by_ldap.sh.inc:
+  Test shell scripts listed in test execution order.
+  See DESCRIPTION in each file.
+
+Note that hostbased authentication we cannot test without to install.
+Generated testhostkey_* certificates are with sslserver and sslclient
+purposes and you can use them to test manually hostbased authentication.
+
+
+4.) Troubleshooting
+"make check-certs" fails on:
+
+4.1.) "generating a new ... private key for the TEST CA ..."
+Usually this happen on system without /dev/{u}random.
+In file [BUILDDIR]/tests/CA/openssh_ca-2.log we can see a message:
+"... PRNG not seeded ...".
+Read again WARNING.RNG from OpenSSH sourcedir and/or
+http://www.openssl.org/support/faq.html
+
+4.1.1.) reconfigure your system and/or openssl
+4.1.2.) or do next
+4.1.2.1.) install OpenSSH :-( otherwise later "make check-certs"
+(ssh-keygen) fail with message:
+"couldn't exec '.../libexec/ssh-rand-helper': ..."
+and second ./ssh-rand-helper fail with message:
+"couldn't read entropy commands file ../ssh_prng_cmds: ..."
+Tip: configure OpenSSH with prefix for example $HOME/test
+
+4.1.2.2.) run:
+ssh-rand-helper
+rm -f $HOME/.rnd
+ln -s .ssh/prng_seed $HOME/.rnd
+Note: ssh-rand-helper is removed in OpenSSH 5.9.
+
+4.1.2.3.) test openssl with command:
+/usr/local/ssl/bin/openssl genrsa -des3 -passout pass:change_it
+Tip: before to create every key with OpenSSL run ssh-rand-helper !
+
+4.1.2.4.) run again "... make check-certs ..."
+
+4.2.) fail on first check: "* rsa_sha1 valid blob              failed"
+- Usually SUDO command is not set. See p. 3.1.2.1.
+- When you build with tcpwrappers your hosts.allow must permit
+connections from localhost, otherwise you can see in failed message
+text like this: "... connection closed by remote host ..."
+
+4.3.) fail on "starting OCSP responder(XXX) on YYY:NNNNN       failed"
+- Ensure sequence of about six free ports and use SSH_VA_BASEPORT
+  to specify first of them.
+- Ensure enough timeout previous running OCSP responders to free
+  ports. Increase value of SSH_OPENSLL_OCSP_TMOUT in test config file.
+
+
+5.) FAQ
+
+Q.) How to convert a certificate from DER to PEM format?
+A.) Run command "openssl x509 ..." with command line options
+-inform/-outform  - you can select one of formats: DER, NET or PEM.
+The default is PEM.
+
+Q.) How to convert pfx to p12 file?
+A.) Just change file extension ;-).
+
+Q.) How to use my p12 file in OpenSSH as identity?
+A.) Run commands:
+$ openssl pkcs12 -in FILE.p12 -clcerts > id_x509
+$ ssh-keygen -f id_x509 -y > id_x509.pub
+  Don't forget to set properly permition on file id_x509, as
+example "chmod 600 id_x509".
+  Note name of identity file can be one of defaults:
+  'id_rsa' or 'id_dsa'.
+  Configure client.
+
+Q.) How to use p12 file in OpenSSH as hostkey?
+A.) Note that host keys are password less!
+  It is similar to client identity.
+  Remember umask settings.
+  Run as root commands:
+# umask 0077
+# openssl pkcs12 -in FILE.p12 -clcerts > ssh_host_x509
+  Note: you must enter export password!
+# ssh-keygen -p -f ssh_host_x509 -N ''
+  Now hostkey file is password less !
+# ssh-keygen -f ssh_host_x509 -y > ssh_host_x509.pub
+  Restore umask settings.
+  Note name of hostkey file can be one of defaults:
+  'ssh_host_dsa_key' or 'ssh_host_rsa_key'.
+  Configure server, test configuration with command
+# sshd -t ..../sshd_config
+  and start/restart the server. Don't forget to inform users
+  that hostkey is changed!
+
+Q.) How to import CA certificates and/or CRLs in LDAP?
+A.) You should create a ldif file with LDAP entries that contains
+  binary atributes "cACertificate" and/or "certificateRevocationList"
+  and to specify path to file with certificate or CRL in DER format.
+  Entry should contain objectClass "pkiCA". See definition in core
+  LDAP schema. After this to use command ldapadd or ldapmodify to
+  add/modify LDAP data. See command manual pages.
+
+  As example when you build OpenSSH with ldap queries after
+  regression test see content of file
+    $(top_builddir)/tests/CA/ldap/ca.ldif .
+  This file is created by the script
+    $(srcdir)/tests/CA/5-cre_ldap.sh
+  and entries are added to LDAP with command:
+$ ldapadd -x -w secret -D cn=... -H ldap://... \
+    -f .../ca.ldif .
+  See ldapadd manual page for options meaning.
+
+Q.) How to build with FIPS capable OpenSSL ?
+A.) At configure time you must set environment variables:
+  CC : openssl fips compiler - fipsld
+  FIPSLD_CC : actual compiler to be used by openssl fips compiler
+
+  Sample command:
+$ CC=gcc FIPSLD_CC=fipsld .../configure ...
+
+  Next verify configure script output:
+....
+   Actual compiler: gcc
+          Compiler: FIPSLD_CC=$(FIPSLD_CC) fipsld
+....
+
+
+Enjoy ;-)

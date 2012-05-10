@@ -1,0 +1,290 @@
+# Copyright (c) 2002-2004,2011 Roumen Petrov, Sofia, Bulgaria
+# All rights reserved.
+#
+# Redistribution and use of this script, with or without modification, is
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of this script must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
+#  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+#  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+#  OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+#  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+#  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+#  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# DESCRIPTION: Usefull functions.
+#
+
+
+# ===
+#
+# define colors and more for echo commands
+#
+#    \033          ascii ESCape
+#    \033[<NUM>G   move to column <NUM> (linux console, xterm, not vt100)
+#    \033[<NUM>C   move <NUM> columns forward but only upto last column
+#    \033[<NUM>D   move <NUM> columns backward but only upto first column
+#    \033[<NUM>A   move <NUM> rows up
+#    \033[<NUM>B   move <NUM> rows down
+#    \033[1m       switch bold on
+#    \033[31m      switch red on
+#    \033[32m      switch green on
+#    \033[33m      switch yellow on
+#    \033[m        switch color/bold off
+#    \017          exit alternate mode (xterm, vt100, linux console)
+#    \033[10m      exit alternate mode (linux console)
+#    \015          carriage return (without newline)
+#
+
+if test -z "${LINES}" -o -z "${COLUMNS}" ; then
+    eval `stty size 2>/dev/null | (read L C; \
+      if test x${L} = x; then L=24; fi; \
+      if test x${C} = x; then C=80; fi; \
+      echo LINES=${L} COLUMNS=${C} )`
+fi
+test ${LINES}   -eq 0 && LINES=24
+test ${COLUMNS} -eq 0 && COLUMNS=80
+export LINES COLUMNS
+
+if test "${TERM}" != "dumb" ; then
+         esc=`printf '\033'`
+        extd="${esc}[1m"
+        warn="${esc}[1;31m"
+        done="${esc}[1;32m"
+        attn="${esc}[1;34m"
+        norm=`printf '%s\017' "${esc}[m"`
+        stat=`printf '\015%s' "${esc}[${COLUMNS}C${esc}[10D"`
+
+     msg_done="${stat}${done}done${norm}"
+   msg_failed="${stat}${warn}failed${norm}"
+
+else
+         esc=""
+        extd=""
+        warn=""
+        done=""
+        attn=""
+        norm=""
+        stat=""
+
+     msg_done="..done"
+   msg_failed="..failed"
+
+fi
+
+
+# ===
+error_file_not_found () {
+  echo "${warn}file ${attn}${1}${warn} not found${norm}"
+  return 1
+}
+
+
+# ===
+error_file_not_readable () {
+  echo "${warn}file ${attn}${1}${warn} not found or not readable${norm}"
+  return 1
+}
+
+
+# ===
+error_dir_not_found () {
+  echo "${warn}directory ${attn}${1}${warn} not found${norm}"
+  return 1
+}
+
+
+# ===
+printSeparator() {
+  echo "======================================================================="
+}
+
+
+# ===
+show_status () {
+  if test -n "$2"; then
+    printf '%s' "$2"
+  fi
+  if test $1 -eq 0; then
+    echo "$msg_done"
+  else
+    echo "$msg_failed"
+  fi
+  return $1
+}
+
+
+# ===
+getNextFreeName() {
+  var="$1"
+  limit="$2"
+
+  if test -z "${limit}"; then
+    limit=10
+  fi
+
+  count=0
+  while true; do
+    test ! -f "${var}${count}" && break
+    count=`expr ${count} + 1`
+    if test ${count} -ge ${limit}; then
+      echo "getNextFreeName: ${warn}limit reached${norm} for file ${attn}${var}${norm}" >&2
+
+      echo ""
+      return 33
+    fi
+  done
+
+  echo "${var}${count}"
+  return 0
+}
+
+
+# ===
+getNextDirName() {
+  var="$1"
+  count=0
+  while true; do
+    test ! -d "${var}.${count}" && break
+    count=`expr ${count} + 1`
+  done
+  if test ${count} -ge 10; then
+    echo "${warn}please remove ${attn}${var}${warn} backup directories !${norm}" >&2
+    return 33
+  fi
+  echo $count
+  return 0
+}
+
+
+# ===
+create_empty_file () {
+  cat /dev/null > "$1"
+}
+
+
+# ===
+update_file () {
+  var_new="$1"
+  var_old="$2"
+
+  if test ! -f "${var_old}"; then
+    printf '%s' "creating file ${attn}${var_old}${norm}"
+    mv "${var_new}" "${var_old}"; show_status $?
+    return $?
+  fi
+  test -r "${var_new}" || { error_file_not_readable "${var_new}"; return 1; }
+
+  if diff "${var_old}" "${var_new}" >/dev/null 2>&1; then
+    echo "no changes in ${attn}${var_old}${norm}"
+    rm -f "${var_new}"
+    return 0
+  fi
+
+  backup=`getNextFreeName "${var_old}."` || return $?
+  printf '%s' "saving old file as ${attn}${backup}${norm}"
+  cp -p "${var_old}" "${backup}"; show_status $? || return $?
+
+  printf '%s' "updating file ${attn}${var_old}${norm}"
+  if test ! -w "${var_old}"; then
+    chmod u+w "${var_old}"
+    not_writable="yes"
+  fi
+  cat "${var_new}" > "${var_old}"; show_status $? || return $?
+  if test "$not_writable" = "yes"; then
+    chmod u-w "${var_old}"
+  fi
+  rm -f "${var_new}"
+  return 0
+}
+
+
+# ===
+getSSHkeyType () {
+  identity_file="$1"
+  if test ! -r "$identity_file"; then
+    error_file_not_readable "${identity_file}" >&2; return $?
+  fi
+
+  sshkeytype="unspec"
+  retval=0
+
+  sshkeytype=`"${TEST_SSH_SSHKEYGEN}" -f "${identity_file}" -y 2>/dev/null`; retval=$?
+  if test $retval -ne 0 ; then
+    echo "${warn}command${norm} ${TEST_SSH_SSHKEYGEN} ${warn}fail${norm}" >&2
+    return $retval
+  fi
+  echo "${sshkeytype}" | cut -d ' ' -f 1
+  return 0
+}
+
+
+# ===
+getSubject () {
+  identity_file="$1"
+#rest of arguments passed to openssl
+
+  if test ! -r "$identity_file"; then
+    error_file_not_readable "${identity_file}" >&2
+    return 1
+  fi
+  shift
+
+  retval=0
+
+#SHELL bug or ?: when we assign command result to "local xxx=..." retval is always zero :-/ !!!
+#unix sh don't like local :-)
+#  local subject=`"${OPENSSL}" x509 -noout -subject -in "${identity_file}" $*`; retval=$?
+#
+  if test -n "${SSH_DN_UTF8_FLAG}"; then
+    NAMEOPT="-nameopt utf8,sep_comma_plus" #ok
+    #NAMEOPT="-nameopt esc_2253,esc_ctrl,esc_msb,utf8,dump_nostr,dump_der,use_quote,sep_comma_plus_space,sname" #fail - esc_msb should be removed
+    #NAMEOPT="-nameopt esc_2253,esc_ctrl,utf8,dump_nostr,dump_der,use_quote,sep_comma_plus_space,sname" #ok
+    #NAMEOPT="-nameopt esc_2253,esc_ctrl,-esc_msb,utf8,dump_nostr,dump_der,use_quote,sep_comma_plus_space,sname" #ok
+    #NAMEOPT="-nameopt esc_2253,esc_ctrl,esc_msb,utf8,dump_nostr,dump_der,use_quote,sep_comma_plus_space,sname,-esc_msb" #ok
+    #NAMEOPT="-nameopt oneline,-esc_msb,-space_eq" #ok
+    #NAMEOPT="-nameopt oneline,-esc_msb" #now ok (spaces around '=')
+  else
+    NAMEOPT=
+  fi
+  subject=`"${OPENSSL}" x509 -noout -subject ${NAMEOPT} -in "${identity_file}" $* 2>/dev/null`; retval=$?
+  if test $retval -ne 0 ; then
+    echo "${warn}cannot get certificate subject${norm}" >&2
+    return $retval
+  fi
+
+#on some ksh versions output is broken if utf8 string contain parenthesis.
+#ksh 2007-03-28 fail. good versions are 2010-06-21 and 2011-02-08.
+  echo "$subject" | cut -d ' ' -f 2-
+}
+
+
+#===
+creX509AuthorizedKeysFile () {
+  identity_file="$1"
+
+  sshkeytype=`getSSHkeyType "${identity_file}"` || return $?
+  subject=`getSubject "${identity_file}"` || return $?
+  echo "${sshkeytype} subject ${subject}" > "${AUTHORIZEDKEYSFILE}"
+}
+
+
+# ===
+utf8base64() {
+  if test -n "${SSH_DN_UTF8_FLAG}"; then
+    printf ':'
+    printf "$1" | ${OPENSSL} enc -a -e | xargs printf ' %s\n'
+  else
+    printf " $1"
+  fi
+}
+
+
+# ===
+FUNCTIONS_INCLUDED="yes"

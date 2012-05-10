@@ -1,0 +1,228 @@
+# Copyright (c) 2002-2006,2011 Roumen Petrov, Sofia, Bulgaria
+# All rights reserved.
+#
+# Redistribution and use of this script, with or without modification, is
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of this script must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
+#  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+#  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+#  OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+#  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+#  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+#  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# DESCRIPTION: OpenSSH CA configuration.
+#
+
+
+# === setup from build environment:
+. ./env
+
+# === main variables:
+# on some system (with pam?, AIX?, when port is below 1024, etc.) we
+# might use sudo command to start sshd when current user isn`t root or
+# to run tests as root.
+# Prefered user for tests is NOT root :-) !
+SUDO=${SUDO-}
+# uncomment to override enviroment
+#SUDO=sudo
+
+
+#Old BSD shells, including the Ultrix `sh', don't accept the colon
+#for any shell substitution, and complain and die.
+##TMPDIR="${TMPDIR:-/tmp}"
+
+if test -n "$TMPDIR"; then
+  if test ! -d "$TMPDIR"; then
+    echo "error: $TMPDIR is not directory"
+    exit 1
+  fi
+  if test ! -w "$TMPDIR"; then
+    echo "error: $TMPDIR is not writable"
+    exit 1
+  fi
+else
+  for D in /tmp /var/tmp /usr/tmp; do
+    test -d $D || continue
+    test -w $D || continue
+    TMPDIR=$D
+    break
+  done
+  if test -z "$TMPDIR"; then
+    echo "error: cannot set TMPDIR"
+    exit 1
+  fi
+fi
+
+
+if test -z "${SSH_X509TESTS}"; then
+SSH_X509TESTS="\
+ blob_auth
+ dn_auth_file
+ dn_auth_path
+ agent
+ crl
+ self
+ alg
+ algfmt
+ ocsp
+ by_ldap
+"
+fi
+
+
+# === openssl:
+
+if test -z "${OPENSSL}"; then
+  OPENSSL=`which openssl 2>/dev/null`
+  if test -z "${OPENSSL}"; then
+    echo "error:cannot find openssl is your path !" >&2
+    exit 1
+  fi
+fi
+
+#NOTE: environment variable OPENSSL_FIPS is used as test flag
+# in regression tests
+if test yes = $OPENSSL_FIPS_MODE; then
+  :
+else
+  # unset OPENSSL_FIPS for non-fips build, to avoid mis-use
+  # of flag in regression tests
+  unset OPENSSL_FIPS
+fi
+
+openssl_version=`$OPENSSL version` || exit $?
+printf "OpenSSL version: ${attn}%s${norm}\n" "$openssl_version"
+
+openssl_nopkcs8_keys=false
+if test -n "$OPENSSL_FIPS"; then
+  #NOTE
+  # - OpenSSL 0.9.8x in fips mode create pkcs8 keys by default
+  # - Force conversion for unstable branches
+  case $openssl_version in
+    *1.0.1*beta*|*1.0.1*dev*)
+      openssl_nopkcs8_keys=:
+      ;;
+  esac
+fi
+
+# These are the known patent issues with OpenSSL:
+# name   #         expires
+# mdc2:  4,908,861 13/03/2007 - enabled in OpenSSL 1.x branches from 2009-08-12
+# idea:  5,214,703 25/05/2010
+# rc5:   5,724,428 03/03/2015
+#
+# Note the MD2 hash algorithm is considered as weak (2009) and
+# most vendors disable it in openssl. Also from 2009-07-08
+# OpenSSL team disable md2 by default in 0.9.8 and 1.x branches.
+# This is reason md2 to be removed from list starting with
+# "X.509 certificate support version 6.3".
+
+if test -z "${RSA_DIGEST_LIST}"; then
+  for DIGEST in sha1 md5 mdc2 md4 rmd160; do
+    if "${OPENSSL}" dgst -${DIGEST} "${OPENSSL}" >/dev/null 2>&1; then
+      RSA_DIGEST_LIST="${RSA_DIGEST_LIST} ${DIGEST}"
+    fi
+  done
+fi
+if test -z "${RSA_DIGEST_LIST}"; then
+  echo "RSA_DIGEST_LIST is empty" >&2
+  exit 1
+fi
+echo "RSA digest list: ${RSA_DIGEST_LIST}"
+
+
+SSH_SIGN_TYPES=""
+for DIGEST in ${RSA_DIGEST_LIST}; do
+  SSH_SIGN_TYPES="${SSH_SIGN_TYPES} rsa_${DIGEST}"
+done
+  SSH_SIGN_TYPES="${SSH_SIGN_TYPES} dsa"
+
+
+# === server section:
+
+if test -z "${SSHD_PORT}"; then
+  SSHD_PORT=20022
+fi
+
+SSHD_LISTENADDRESS=127.0.0.1
+#SSHD_LISTENADDRESS=::1
+
+#"yes" or "no"
+SSHSERVER_USEPRIVILEGESEPARATION="yes"
+#SSHSERVER_USEPRIVILEGESEPARATION="no"
+
+SSHSERVER_SYSLOGFACILITY=AUTH
+SSHSERVER_LOGLEVEL=FATAL
+#SSHSERVER_SYSLOGFACILITY=LOCAL3
+#SSHSERVER_LOGLEVEL=DEBUG3
+
+
+# === certificates:
+
+KEY_PASS="change_it"
+CAKEY_PREFIX="catest"
+
+SSH_CAROOT="`pwd`/ca-test"
+SSH_CAKEYDIR="${SSH_CAROOT}/keys"
+
+CACERTFILE="catest-bundle.crt"
+CACRLFILE="catest-bundle.crl"
+
+SSH_CACERTDIR="${SSH_CAROOT}/crt"
+SSH_CACRLDIR="${SSH_CAROOT}/crl"
+
+CACONFIG="catest.config"
+SSH_CACFGFILE="${SSH_CAROOT}/${CACONFIG}"
+
+SSH_CACERTDAYS=60
+
+SSH_DN_C="XX"
+SSH_DN_ST="World"
+SSH_DN_L="Somewhere"
+SSH_DN_O="OpenSSH Test Team"
+SSH_DN_OU="OpenSSH Testers"
+SSH_DN_EM="email@not.set"
+
+SSH_DN_UTF8_FLAG='-utf8'
+# '-utf8' flag is added in OpenSSL 0.9.7
+case "`${OPENSSL} version`" in
+  *0.9.6*)
+    SSH_DN_UTF8_FLAG=
+    ;;
+  *);;
+esac
+if test -n "${SSH_DN_UTF8_FLAG}"; then
+  SSH_DN_L="$SSH_DN_L cyrillic-АБВГабвг greek-ΑΒΓΔαβγδ"
+  SSH_DN_O="$SSH_DN_O cyrillic-АБВГабвг greek-ΑΒΓΔαβγδ"
+  SSH_DN_OU="$SSH_DN_OU cyrillic-АБВГабвг greek-ΑΒΓΔαβγδ"
+fi
+
+# OpenSSL OCSP test responders listen on BASE, BASE+1, ...
+if test -z "${SSH_VA_BASEPORT}"; then
+  SSH_VA_BASEPORT=20080
+fi
+
+# OpenSSL OCSP responder don't use SO_REUSEADDR :-(, so ocsp tests
+# must wait socket to close.
+SSH_OPENSSL_OCSP_TMOUT=60
+
+# === LDAP:
+SSH_LDAP_DB=bdb
+# "hdb" backend since openldap 2.2+
+#SSH_LDAP_DB=hdb
+# openldap 2.4+ deprecate "ldbm" backend
+#SSH_LDAP_DB=ldbm
+SSH_LDAP_DC="dc=example,dc=com"
+
+if test -z "${LDAPD_PORT}"; then
+  LDAPD_PORT=20389
+fi
+LDAPD_URL="ldap://${SSHD_LISTENADDRESS}:${LDAPD_PORT}"

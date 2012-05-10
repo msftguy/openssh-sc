@@ -1,0 +1,120 @@
+.\"
+.\" Author: Roumen Petrov
+.\" Copyright (c) 2011 Roumen Petrov, Sofia, Bulgaria
+.\"                    All rights reserved
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+.\" IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+.\" OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+.\" IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+.\" INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+.\" NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+.\" DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+.\" THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+.\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+.\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+.\"
+.\" Implement .Dd with the Mdocdate RCS keyword
+.rn Dd xD
+.de Dd
+.ie \\$1$Mdocdate: \{\
+.	xD \\$2 \\$3, \\$4
+.\}
+.el .xD \\$1 \\$2 \\$3 \\$4 \\$5 \\$6 \\$7 \\$8
+..
+.Dd $Mdocdate: August 15 2011 $
+.Dt SSH_ENGINE 5
+.Os
+.Sh NAME
+.Nm ssh_engine
+.Nd OpenSSH engine configuration file
+.Sh SYNOPSIS
+.Nm ~/.ssh/engine
+.Sh DESCRIPTION
+.Xr ssh 1
+obtains additional
+.Xr openssl 1
+engine post initialization configuration from
+the following source:
+.Pp
+.Bl -enum -offset indent -compact
+.It
+user's configuration file
+.Pq Pa ~/.ssh/engine
+.El
+.Pp
+The configuration files contain sections separated by
+.Dq Engine
+specification, and each section is applied only for
+engine that match name given in specification.
+Each engine command is executed immediately after
+parsing of line.
+.Pp
+The configuration file has the following format:
+.Pp
+Empty lines and lines starting with
+.Ql #
+are comments.
+Otherwise a line is of the format
+.Dq command argument .
+Commands may be separated by whitespace or
+optional whitespace and exactly one
+.Ql = .
+Argument may optionally be enclosed in double quotes
+.Pq \&"
+in order to represent command argument containing spaces.
+.Pp
+.Bl -tag -width Ds
+.It Cm Engine
+Restricts the following declarations (up to the next
+.Cm Engine
+keyword) to be only for engine that match name given after the keyword
+.It Cm [Command]
+Specific to engine
+.Sq control commands .
+Use
+.Xr openssl 1
+.Va engine -vv
+command to list supported control commands with desctription.
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa ~/.ssh/engine
+This is the per-user
+.Xr openssl 1
+engine configuration file.
+The format of this file is described above.
+This file is used by the SSH client.
+Because of the potential for abuse, this file must have strict permissions:
+read/write for the user, and not accessible by others.
+.El
+.Sh EXAMPLES
+An example OpenSSH engine configuration file:
+.Bd -literal -offset 3n
+# Comments allowed at start of line
+Engine e_nss
+CONFIG_DIR /home/sample/.mozilla/firefox/xxxxxxxx.default/
+# Above command specifies the NSS config directory.
+# Refer to mozilla.org documentation how to find you profile directoty.
+.Ed
+.Sh SEE ALSO
+.Xr ssh 1
+.Sh AUTHORS
+OpenSSH is a derivative of the original and free
+ssh 1.2.12 release by Tatu Ylonen.
+Aaron Campbell, Bob Beck, Markus Friedl, Niels Provos,
+Theo de Raadt and Dug Song
+removed many bugs, re-added newer features and
+created OpenSSH.
+Markus Friedl contributed the support for SSH
+protocol versions 1.5 and 2.0.
+Roumen Petrov contributed support for X.509 certificates.

@@ -1,0 +1,64 @@
+SSH_ENGINE(5)               BSD File Formats Manual              SSH_ENGINE(5)
+
+NAME
+     ssh_engine -- OpenSSH engine configuration file
+
+SYNOPSIS
+     ~/.ssh/engine
+
+DESCRIPTION
+     ssh(1) obtains additional openssl(1) engine post initialization configu-
+     ration from the following source:
+
+           1.   user's configuration file (~/.ssh/engine)
+
+     The configuration files contain sections separated by ``Engine'' specifi-
+     cation, and each section is applied only for engine that match name given
+     in specification.  Each engine command is executed immediately after
+     parsing of line.
+
+     The configuration file has the following format:
+
+     Empty lines and lines starting with '#' are comments.  Otherwise a line
+     is of the format ``command argument''.  Commands may be separated by
+     whitespace or optional whitespace and exactly one '='.  Argument may
+     optionally be enclosed in double quotes (") in order to represent command
+     argument containing spaces.
+
+     Engine  Restricts the following declarations (up to the next Engine key-
+             word) to be only for engine that match name given after the key-
+             word
+
+     [Command]
+             Specific to engine 'control commands'.  Use openssl(1) engine -vv
+             command to list supported control commands with desctription.
+
+FILES
+     ~/.ssh/engine
+             This is the per-user openssl(1) engine configuration file.  The
+             format of this file is described above.  This file is used by the
+             SSH client.  Because of the potential for abuse, this file must
+             have strict permissions: read/write for the user, and not acces-
+             sible by others.
+
+EXAMPLES
+     An example OpenSSH engine configuration file:
+
+        # Comments allowed at start of line
+        Engine e_nss
+        CONFIG_DIR /home/sample/.mozilla/firefox/xxxxxxxx.default/
+        # Above command specifies the NSS config directory.
+        # Refer to mozilla.org documentation how to find you profile directoty.
+
+SEE ALSO
+     ssh(1)
+
+AUTHORS
+     OpenSSH is a derivative of the original and free ssh 1.2.12 release by
+     Tatu Ylonen.  Aaron Campbell, Bob Beck, Markus Friedl, Niels Provos, Theo
+     de Raadt and Dug Song removed many bugs, re-added newer features and cre-
+     ated OpenSSH.  Markus Friedl contributed the support for SSH protocol
+     versions 1.5 and 2.0.  Roumen Petrov contributed support for X.509 cer-
+     tificates.
+
+BSD                             August 15, 2011                            BSD
