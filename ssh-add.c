@@ -271,13 +271,14 @@ add_file(AuthenticationConnection *ac, const char *filename, int key_only)
 static int
 update_card(AuthenticationConnection *ac, int add, const char *id)
 {
-	char *pin;
+	char *pin = NULL;
 	int ret = -1;
 
-	pin = read_passphrase("Enter passphrase for PKCS#11: ", RP_ALLOW_STDIN);
-	if (pin == NULL)
-		return -1;
-
+	if (add) {
+        pin = read_passphrase("Enter passphrase for PKCS#11: ", RP_ALLOW_STDIN);
+        if (pin == NULL)
+            return -1;
+    }
 	if (ssh_update_card(ac, add, id, pin, lifetime, confirm)) {
 		fprintf(stderr, "Card %s: %s\n",
 		    add ? "added" : "removed", id);
@@ -287,7 +288,9 @@ update_card(AuthenticationConnection *ac, int add, const char *id)
 		    add ? "add" : "remove", id);
 		ret = -1;
 	}
-	xfree(pin);
+    if (add) {
+        xfree(pin);
+    }
 	return ret;
 }
 

@@ -664,7 +664,7 @@ ssh_update_card(AuthenticationConnection *auth, int add,
 	buffer_init(&msg);
 	buffer_put_char(&msg, type);
 	buffer_put_cstring(&msg, reader_id);
-	buffer_put_cstring(&msg, pin);
+	if (add) { buffer_put_cstring(&msg, pin); }
 
 	if (constrained) {
 		if (life != 0) {

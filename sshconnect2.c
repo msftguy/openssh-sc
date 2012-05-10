@@ -79,6 +79,8 @@
 #include "ssh-gss.h"
 #endif
 
+#define DEBUG_PK 1
+
 /* import */
 extern char *client_version_string;
 extern char *server_version_string;
@@ -1259,7 +1261,7 @@ sign_and_send_pubkey(Authctxt *authctxt, Identity *id)
 	} else {
 		buffer_put_cstring(&b, authctxt->method->name);
 		buffer_put_char(&b, have_sig);
-		buffer_put_cstring(&b, key_ssh_name(id->key));
+		buffer_put_cstring(&b, key_ssh_name_plain(id->key));
 	}
 	buffer_put_string(&b, blob, bloblen);
 
@@ -1284,7 +1286,7 @@ sign_and_send_pubkey(Authctxt *authctxt, Identity *id)
 		buffer_put_cstring(&b, authctxt->method->name);
 		buffer_put_char(&b, have_sig);
 		if (!(datafellows & SSH_BUG_PKAUTH))
-			buffer_put_cstring(&b, key_ssh_name(id->key));
+			buffer_put_cstring(&b, key_ssh_name_plain(id->key));
 		buffer_put_string(&b, blob, bloblen);
 	}
 	xfree(blob);
@@ -1329,7 +1331,7 @@ send_pubkey_test(Authctxt *authctxt, Identity *id)
 	packet_put_cstring(authctxt->method->name);
 	packet_put_char(have_sig);
 	if (!(datafellows & SSH_BUG_PKAUTH))
-		packet_put_cstring(key_ssh_name(id->key));
+		packet_put_cstring(key_ssh_name_plain(id->key));
 	packet_put_string(blob, bloblen);
 	xfree(blob);
 	packet_send();

@@ -815,8 +815,6 @@ process_remove_smartcard_key(SocketEntry *e)
 	Idtab *tab;
 
 	provider = buffer_get_string(&e->request, NULL);
-	pin = buffer_get_string(&e->request, NULL);
-	xfree(pin);
 
 	for (version = 1; version < 3; version++) {
 		tab = idtab_lookup(version);

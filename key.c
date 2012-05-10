@@ -319,9 +319,9 @@ key_equal_public(const Key *a, const Key *b)
 	case KEY_RSA_CERT_V00:
 	case KEY_RSA_CERT:
 	case KEY_RSA:
-#ifdef SSH_X509STORE_DISABLED
+//#ifdef SSH_X509STORE_DISABLED
 	case KEY_X509_RSA:
-#endif
+//#endif
 		return a->rsa != NULL && b->rsa != NULL &&
 		    BN_cmp(a->rsa->e, b->rsa->e) == 0 &&
 		    BN_cmp(a->rsa->n, b->rsa->n) == 0;
@@ -357,7 +357,7 @@ key_equal_public(const Key *a, const Key *b)
 		return 1;
 #endif /* OPENSSL_HAS_ECC */
 #ifndef SSH_X509STORE_DISABLED
-	case KEY_X509_RSA:
+//	case KEY_X509_RSA:
 	case KEY_X509_DSA:
 		return ssh_x509_equal(a, b) == 0;
 		break;
@@ -371,12 +371,13 @@ key_equal_public(const Key *a, const Key *b)
 int
 key_equal(const Key *a, const Key *b)
 {
-	if (a == NULL || b == NULL || a->type != b->type)
+	if (a == NULL || b == NULL || key_type_plain(a->type) != key_type_plain(b->type))
 		return 0;
 	if (key_is_cert(a)) {
 		if (!cert_compare(a->cert, b->cert))
 			return 0;
 	}
+    debug3("key_equal: calling key_equal_public()");
 	return key_equal_public(a, b);
 }
 
@@ -1784,8 +1785,12 @@ key_to_blob(const Key *key, u_char **blobp, u_int *lenp)
 		buffer_put_bignum2(&b, key->rsa->n);
 		break;
 	case KEY_X509_RSA:
-	case KEY_X509_DSA:
-		if (!x509key_to_blob(key, &b))
+        buffer_put_cstring(&b, key_ssh_name_plain(key));
+        buffer_put_bignum2(&b, key->rsa->e);
+        buffer_put_bignum2(&b, key->rsa->n);
+        break;
+    case KEY_X509_DSA:
+        if (!x509key_to_blob(key, &b))
 			return 0;
 		break;
 	default:

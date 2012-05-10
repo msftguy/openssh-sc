@@ -1048,7 +1048,9 @@ ssh_x509_sign(
 		buffer_init(&b);
 		signame = X509PUBALG_SIGNAME(xkalg);
 		debug3("ssh_x509_sign: signame=%.50s", signame);
-		buffer_put_cstring(&b, signame);
+        //buffer_put_cstring(&b, signame);
+		buffer_put_cstring(&b, "ssh-rsa");
+        
 		buffer_put_string(&b, sigret, siglen);
 
 		{
@@ -1061,6 +1063,7 @@ ssh_x509_sign(
 				memcpy(*psignature, buffer_ptr(&b), len);
 			}
 		}
+        buffer_dump(&b);
 		buffer_free(&b);
 	}
 	if (sigret) {
