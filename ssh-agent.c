@@ -36,6 +36,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define __APPLE__ 1
+#ifdef __APPLE__
+    #define __APPLE_LAUNCHD__ 1
+#endif
+
 #include "includes.h"
 
 #include <sys/types.h>
@@ -67,6 +72,11 @@
 #include <time.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef __APPLE_LAUNCHD__
+#include <launch.h>
+#endif
+
 
 #include "xmalloc.h"
 #include "ssh.h"
@@ -1173,6 +1183,11 @@ int
 main(int ac, char **av)
 {
 	int c_flag = 0, d_flag = 0, k_flag = 0, s_flag = 0;
+
+#ifdef __APPLE_LAUNCHD__
+	int l_flag = 0;
+#endif
+
 	int sock, fd, ch, result, saved_errno;
 	u_int nalloc;
 	char *shell, *format, *pidstr, *agentsocket = NULL;
@@ -1207,7 +1222,11 @@ main(int ac, char **av)
 	__progname = ssh_get_progname(av[0]);
 	seed_rng();
 
-	while ((ch = getopt(ac, av, "cdksa:t:")) != -1) {
+#ifdef __APPLE_LAUNCHD__
+	while ((ch = getopt(ac, av, "cdklsa:t:")) != -1) {
+#else
+    while ((ch = getopt(ac, av, "cdksa:t:")) != -1) {
+#endif
 		switch (ch) {
 		case 'c':
 			if (s_flag)
@@ -1217,6 +1236,11 @@ main(int ac, char **av)
 		case 'k':
 			k_flag++;
 			break;
+#ifdef __APPLE_LAUNCHD__
+            case 'l':
+                l_flag++;
+                break;
+#endif                
 		case 's':
 			if (c_flag)
 				usage();
@@ -1243,7 +1267,11 @@ main(int ac, char **av)
 	ac -= optind;
 	av += optind;
 
-	if (ac > 0 && (c_flag || k_flag || s_flag || d_flag))
+	if (ac > 0 && (c_flag || k_flag || s_flag || d_flag
+#ifdef __APPPLE_LAUNCHD__
+                   || l_flag
+#endif
+                   ))
 		usage();
 
 	if (ac == 0 && !c_flag && !s_flag) {
@@ -1299,6 +1327,56 @@ main(int ac, char **av)
 	 * Create socket early so it will exist before command gets run from
 	 * the parent.
 	 */
+#ifdef __APPLE_LAUNCHD__
+    if (l_flag) {
+        launch_data_t resp, msg, tmp;
+        size_t listeners_i;
+        
+        msg = launch_data_new_string(LAUNCH_KEY_CHECKIN);
+        
+        resp = launch_msg(msg);
+        
+        if (NULL == resp) {
+            perror("launch_msg");
+            exit(1);
+        }
+        launch_data_free(msg);
+        switch (launch_data_get_type(resp)) {
+            case LAUNCH_DATA_ERRNO:
+                errno = launch_data_get_errno(resp);
+                perror("launch_msg response");
+                exit(1);
+            case LAUNCH_DATA_DICTIONARY:
+                break;
+            default:
+                fprintf(stderr, "launch_msg unknown response");
+                exit(1);
+        }
+        tmp = launch_data_dict_lookup(resp, LAUNCH_JOBKEY_SOCKETS);
+        
+        if (NULL == tmp) {
+            fprintf(stderr, "no sockets\n");
+            exit(1);
+        }
+        
+        tmp = launch_data_dict_lookup(tmp, "Listeners");
+        
+        if (NULL == tmp) {
+            fprintf(stderr, "no known listeners\n");
+            exit(1);
+        }
+// do it here since skip2 skips over this one..
+#ifdef ENABLE_PKCS11
+        pkcs11_init(0);
+#endif
+        for (listeners_i = 0; listeners_i < launch_data_array_get_count(tmp); listeners_i++) {
+            launch_data_t obj_at_ind = launch_data_array_get_index(tmp, listeners_i);
+            new_socket(AUTH_SOCKET, launch_data_get_fd(obj_at_ind));
+        }
+        
+        launch_data_free(resp);
+    } else {
+#endif
 	sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sock < 0) {
 		perror("socket");
@@ -1320,7 +1398,14 @@ main(int ac, char **av)
 		perror("listen");
 		cleanup_exit(1);
 	}
-
+#ifdef __APPLE_LAUNCHD__
+    }
+#endif
+        
+#ifdef __APPLE_LAUNCHD__
+    if (l_flag)
+        goto skip2;
+#endif
 	/*
 	 * Fork, and have the parent execute the command, if any, or present
 	 * the socket data.  The child continues as the authentication agent.
@@ -1392,7 +1477,8 @@ skip:
 	pkcs11_init(0);
 #endif
 	new_socket(AUTH_SOCKET, sock);
-	if (ac > 0)
+skip2:
+    if (ac > 0)
 		parent_alive_interval = 10;
 	idtab_init();
 	if (!d_flag)
