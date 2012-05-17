@@ -830,7 +830,7 @@ process_remove_smartcard_key(SocketEntry *e)
 		tab = idtab_lookup(version);
 		for (id = TAILQ_FIRST(&tab->idlist); id; id = nxt) {
 			nxt = TAILQ_NEXT(id, next);
-			if (!strcmp(provider, id->provider)) {
+			if (id->provider != NULL && 0 == strcmp(provider, id->provider)) {
 				TAILQ_REMOVE(&tab->idlist, id, next);
 				free_identity(id);
 				tab->nentries--;
